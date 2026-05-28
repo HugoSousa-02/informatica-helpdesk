@@ -1,0 +1,18 @@
+# Dependências
+node_modules/
+
+# Variáveis de ambiente
+.env
+
+# Uploads
+uploads/*
+
+# Build
+frontend/dist/
+
+# Logs
+*.log
+
+# Sistema operativo
+.DS_Store
+Thumbs.db

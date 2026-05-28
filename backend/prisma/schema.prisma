@@ -1,0 +1,212 @@
+// Este é o schema do Prisma que define todas as tabelas da base de dados MySQL
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ENUMS
+enum Role {
+  admin
+  tecnico
+  recepcao
+}
+
+enum Priority {
+  baixa
+  media
+  alta
+  urgente
+}
+
+enum TicketStatus {
+  aberto
+  em_progresso
+  aguarda_peca
+  resolvido
+  fechado
+}
+
+enum ServiceType {
+  loja
+  externo
+  remoto
+}
+
+enum MovementType {
+  entrada
+  saida
+}
+
+enum NotificationType {
+  ticket
+  stock
+  agenda
+  sistema
+}
+
+// MODELS (TABELAS)
+
+model User {
+  id                  Int              @id @default(autoincrement())
+  name                String           @db.VarChar(100)
+  email               String           @unique @db.VarChar(100)
+  passwordHash        String           @map("password_hash") @db.VarChar(255)
+  role                Role
+  photo               String?          @db.VarChar(255)
+  googleToken         String?          @map("google_token") @db.Text
+  googleRefreshToken  String?          @map("google_refresh_token") @db.Text
+  pushSubscription    String?          @map("push_subscription") @db.Text
+  active              Boolean          @default(true)
+  createdAt           DateTime         @default(now()) @map("created_at")
+
+  // Relações
+  ticketsAssigned     Ticket[]         @relation("TechTickets")
+  ticketsCreated      Ticket[]         @relation("CreatedTickets")
+  ticketNotes         TicketNote[]
+  ticketHistory       TicketHistory[]
+  attachments         Attachment[]
+  stockMovements      StockMovement[]
+  notifications       Notification[]
+
+  @@map("users")
+}
+
+model Client {
+  id        Int       @id @default(autoincrement())
+  name      String    @db.VarChar(100)
+  email     String?   @db.VarChar(100)
+  phone     String?   @db.VarChar(20)
+  address   String?   @db.Text
+  nif       String?   @db.VarChar(20)
+  notes     String?   @db.Text
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  tickets   Ticket[]
+
+  @@map("clients")
+}
+
+model Ticket {
+  id                Int          @id @default(autoincrement())
+  clientId          Int          @map("client_id")
+  techId            Int?         @map("tech_id")
+  title             String       @db.VarChar(255)
+  description       String       @db.Text
+  equipment         String?      @db.VarChar(255)
+  priority          Priority     @default(media)
+  status            TicketStatus @default(aberto)
+  serviceType       ServiceType  @map("service_type")
+  clientAddress     String?      @map("client_address") @db.Text
+  scheduledAt       DateTime?    @map("scheduled_at")
+  estimatedDuration Int?         @map("estimated_duration")
+  resolvedAt        DateTime?    @map("resolved_at")
+  googleEventId     String?      @map("google_event_id") @db.VarChar(255)
+  createdBy         Int          @map("created_by")
+  createdAt         DateTime     @default(now()) @map("created_at")
+  updatedAt         DateTime     @updatedAt @map("updated_at")
+
+  // Relações
+  client            Client       @relation(fields: [clientId], references: [id])
+  tech              User?        @relation("TechTickets", fields: [techId], references: [id])
+  creator           User         @relation("CreatedTickets", fields: [createdBy], references: [id])
+  notes             TicketNote[]
+  history           TicketHistory[]
+  attachments       Attachment[]
+  stockMovements    StockMovement[]
+
+  @@map("tickets")
+}
+
+model TicketNote {
+  id         Int      @id @default(autoincrement())
+  ticketId   Int      @map("ticket_id")
+  userId     Int      @map("user_id")
+  note       String   @db.Text
+  isInternal Boolean  @default(false) @map("is_internal")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  ticket     Ticket   @relation(fields: [ticketId], references: [id])
+  user       User     @relation(fields: [userId], references: [id])
+
+  @@map("ticket_notes")
+}
+
+model TicketHistory {
+  id        Int      @id @default(autoincrement())
+  ticketId  Int      @map("ticket_id")
+  userId    Int      @map("user_id")
+  oldStatus String?  @map("old_status") @db.VarChar(50)
+  newStatus String?  @map("new_status") @db.VarChar(50)
+  changedAt DateTime @default(now()) @map("changed_at")
+
+  ticket    Ticket   @relation(fields: [ticketId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@map("ticket_history")
+}
+
+model Attachment {
+  id         Int      @id @default(autoincrement())
+  ticketId   Int      @map("ticket_id")
+  filename   String?  @db.VarChar(255)
+  path       String?  @db.VarChar(255)
+  uploadedBy Int?     @map("uploaded_by")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  ticket     Ticket   @relation(fields: [ticketId], references: [id])
+  uploader   User?    @relation(fields: [uploadedBy], references: [id])
+
+  @@map("attachments")
+}
+
+model StockItem {
+  id          Int              @id @default(autoincrement())
+  name        String           @db.VarChar(150)
+  reference   String?          @db.VarChar(100)
+  category    String?          @db.VarChar(100)
+  quantity    Int              @default(0)
+  minQuantity Int              @default(5) @map("min_quantity")
+  supplier    String?          @db.VarChar(150)
+  costPrice   Decimal?         @db.Decimal(10, 2) @map("cost_price")
+  createdAt   DateTime         @default(now()) @map("created_at")
+
+  movements   StockMovement[]
+
+  @@map("stock_items")
+}
+
+model StockMovement {
+  id        Int           @id @default(autoincrement())
+  itemId    Int           @map("item_id")
+  ticketId  Int?          @map("ticket_id")
+  type      MovementType
+  quantity  Int
+  userId    Int?          @map("user_id")
+  notes     String?       @db.Text
+  createdAt DateTime      @default(now()) @map("created_at")
+
+  item      StockItem     @relation(fields: [itemId], references: [id])
+  ticket    Ticket?       @relation(fields: [ticketId], references: [id])
+  user      User?         @relation(fields: [userId], references: [id])
+
+  @@map("stock_movements")
+}
+
+model Notification {
+  id        Int              @id @default(autoincrement())
+  userId    Int              @map("user_id")
+  title     String?          @db.VarChar(255)
+  message   String?          @db.Text
+  type      NotificationType
+  readAt    DateTime?        @map("read_at")
+  createdAt DateTime         @default(now()) @map("created_at")
+
+  user      User             @relation(fields: [userId], references: [id])
+
+  @@map("notifications")
+}
